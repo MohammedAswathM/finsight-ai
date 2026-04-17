@@ -1,0 +1,21 @@
+# Core Agentic Framework
+langchain
+langchain-community
+langchain-core
+langgraph
+
+# Vector Database (RAG)
+chromadb
+pypdf
+sentence-transformers
+
+# Data & Tools (SQL Agent)
+yfinance
+pandas
+SQLAlchemy
+
+# User Interface
+streamlit
+
+# Environment & Utilities
+python-dotenv

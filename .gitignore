@@ -1,0 +1,37 @@
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# API Keys and Secrets (CRITICAL)
+*.pem
+*.key
+credentials.json
+client_secret.json
+
+# Local Vector Database Storage (Prevents committing massive files)
+chroma_db/
+vector_store/
+*.sqlite3
+
+# Python Cache
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Streamlit config
+.streamlit/secrets.toml
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
