@@ -29,8 +29,8 @@ models/*.bin
 mlruns/
 mlartifacts/
 
-# Runtime outputs
-outputs/
+# Runtime outputs — keep the folder (so agents can write into it), ignore content.
+outputs/*
 !outputs/.gitkeep
 
 # Private decisions / lessons log — local reference only, do not commit.
