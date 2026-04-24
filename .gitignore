@@ -1,5 +1,6 @@
 # Environments
 .env
+.env.local
 .venv
 env/
 venv/
@@ -13,16 +14,37 @@ venv.bak/
 credentials.json
 client_secret.json
 
-# Local Vector Database Storage (Prevents committing massive files)
+# Local Vector Database Storage
 chroma_db/
 vector_store/
 *.sqlite3
+*.db
+data/finsight.db
+
+# ML models / artifacts (can be large)
+models/finbert-finetuned/
+models/*.pkl
+models/*.joblib
+models/*.bin
+mlruns/
+mlartifacts/
+
+# Runtime outputs
+outputs/
+!outputs/.gitkeep
+
+# Private decisions / lessons log — local reference only, do not commit.
+decisions/
 
 # Python Cache
 __pycache__/
 *.py[cod]
 *$py.class
 .pytest_cache/
+*.egg-info/
+
+# Notebooks
+.ipynb_checkpoints/
 
 # Streamlit config
 .streamlit/secrets.toml
@@ -35,3 +57,8 @@ __pycache__/
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp

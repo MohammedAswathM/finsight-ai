@@ -1,21 +1,54 @@
-# Core Agentic Framework
-langchain
-langchain-community
-langchain-core
-langgraph
+# =============================================================================
+# FinSight AI — Python dependencies
+# Python 3.11+
+# =============================================================================
 
-# Vector Database (RAG)
-chromadb
+# --- Core Agentic Framework ---
+langchain>=0.2.0
+langchain-community>=0.2.0
+langchain-core>=0.2.0
+langchain-groq>=0.1.5
+langgraph>=0.1.0
+
+# --- Vector Database / RAG (Member 1) ---
+chromadb>=0.5.0
 pypdf
 sentence-transformers
+# ParentDocumentRetriever + ContextualCompression need these
+rank-bm25
 
-# Data & Tools (SQL Agent)
+# --- Data & SQL (Member 2) ---
 yfinance
 pandas
+pandas-ta
 SQLAlchemy
+matplotlib
 
-# User Interface
-streamlit
+# --- ML Models (AIML Infra) ---
+# Fraud detection (Member 1)
+xgboost
+lightgbm
+imbalanced-learn
+scikit-learn
+shap
+# FinBERT sentiment (Member 2)
+transformers
+torch
+datasets
+accelerate
+# Forecaster (Member 3) uses lightgbm above
 
-# Environment & Utilities
+# --- MLOps ---
+mlflow
+
+# --- Evaluation (Member 4) ---
+ragas
+
+# --- UI (Member 4) ---
+gradio
+
+# --- News / Sentiment Agent (Member 4) ---
+feedparser
+
+# --- Environment & Utilities ---
 python-dotenv
