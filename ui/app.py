@@ -1,354 +1,257 @@
 """
+FinSight AI — Chainlit UI
 ui/app.py
-FinSight AI — Gradio Frontend
-─────────────────────────────────────────────────────────────────────────────
-Layout:
-  ┌─────────────────────────────────────────────────────────┐
-  │  FinSight AI  —  Financial Intelligence Platform        │
-  ├─────────────────────────────────────────────────────────┤
-  │  [Query Textbox]          [Image Upload (optional)]     │
-  │                    [Analyse]                            │
-  ├────────────────────┬────────────────────────────────────┤
-  │  📊 Report         │  🔎 Agent Trace                    │
-  │  (Markdown)        │  (Textbox / monospace)             │
-  ├────────────────────┴────────────────────────────────────┤
-  │  📈 Chart (if generated)                                │
-  └─────────────────────────────────────────────────────────┘
 
-Run:
-    python ui/app.py
-    python ui/app.py --share      # public Gradio link
+Architecture:
+  - run_pipeline() is the SINGLE integration point.
+  - RIGHT NOW: calls sentiment_agent.run()
+  - LATER: swap ONE line → `from orchestrator.graph import run_graph`
+    and replace the body of run_pipeline() with: return await run_graph(query, image_path)
+
+The UI layer never changes.
 """
 
-from __future__ import annotations
-
-import argparse
-import sys
+import asyncio
 import traceback
 from pathlib import Path
 from typing import Optional
 
-import gradio as gr
+import chainlit as cl
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Path setup — ensure project root is importable
-# ─────────────────────────────────────────────────────────────────────────────
-_ROOT = Path(__file__).resolve().parent.parent
-if str(_ROOT) not in sys.path:
-    sys.path.insert(0, str(_ROOT))
+# ─────────────────────────────────────────────
+# Pipeline integration point
+# ─────────────────────────────────────────────
+# CURRENT: only sentiment agent
+from agents.sentiment_agent import run as run_sentiment
 
-from agents.sentiment_agent import run as run_sentiment   
-from ui.trace_panel import format_trace_markdown  # trace formatter
+# FUTURE (one-line swap):
+# from orchestrator.graph import run_graph
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Core pipeline handler
-# ─────────────────────────────────────────────────────────────────────────────
-def run_pipeline(query: str, uploaded_image: Optional[str]):
+async def run_pipeline(query: str, image_path: Optional[str] = None) -> dict:
     """
-    Run ONLY sentiment agent (no full pipeline)
+    Central pipeline dispatcher.
+    CURRENT: only sentiment agent
     """
 
-    if not query or not query.strip():
-        return (
-            "⚠️ Please enter a query.",
-            "_No trace available._",
-            None,
-        )
+    # ✅ correct call
+    raw = await asyncio.to_thread(run_sentiment, {
+        "query": query,
+        "trace_log": []
+    })
 
-    try:
-        # Build state
-        state = {
-            "query": query.strip(),
-            "trace_log": [],
-        }
-
-        # 🚀 Call ONLY sentiment agent
-        final_state = run_sentiment(state)
-
-        sentiment = final_state.get("sentiment_result", {})
-        trace_log = final_state.get("trace_log", [])
-
-        # ── Build report manually ─────────────────────
-        report = f"""
-# 📊 Sentiment Report
-
-**Ticker:** {sentiment.get("ticker", "N/A")}
-
-**Trend:** {sentiment.get("trend", "N/A")}
-**Score:** {sentiment.get("score", 0)}
-**Confidence:** {sentiment.get("confidence", "N/A")}
-**Headlines Analysed:** {sentiment.get("headline_count", 0)}
-
----
-
-## 📝 Summary
-{sentiment.get("summary", "No summary available.")}
-
----
-
-## 📰 Top Headlines
-"""
-
-        for i, h in enumerate(sentiment.get("top_headlines", []), 1):
-            report += f"{i}. {h}\n"
-
-        # simple trace
-        trace = "\n".join([str(t) for t in trace_log])
-
-        return report, trace, None
-
-    except Exception as e:
-        return (
-            f"❌ Error:\n{str(e)}",
-            "_Trace unavailable_",
-            None,
-        )
-
-def _build_report(state: dict) -> str:
-    """Assemble a readable Markdown report from the final agent state."""
-    parts: list[str] = ["# 📊 FinSight AI — Analysis Report\n"]
-    query = state.get("query", "")
-    if query:
-        parts.append(f"> **Query:** {query}\n")
-
-    # ── Sentiment block ──────────────────────────────────────────────────────
-    sentiment = state.get("sentiment_result")
-    if sentiment:
-        trend_emoji = {
-            "bullish": "📈", "bearish": "📉", "mixed": "↕️", "neutral": "➡️"
-        }.get(sentiment.get("trend", ""), "•")
-
-        conf_emoji = {"high": "🟢", "medium": "🟡", "low": "🔴"}.get(
-            sentiment.get("confidence", ""), "⚪"
-        )
-
-        dist = sentiment.get("distribution", {})
-        ticker = sentiment.get("ticker", "N/A")
-
-        parts.append(f"## {trend_emoji} Sentiment Analysis — `{ticker}`\n")
-        parts.append(f"| Metric | Value |")
-        parts.append(f"|--------|-------|")
-        parts.append(f"| **Trend** | {trend_emoji} {sentiment.get('trend', 'N/A').title()} |")
-        parts.append(f"| **Score** | `{sentiment.get('score', 0):+.4f}` |")
-        parts.append(f"| **Confidence** | {conf_emoji} {sentiment.get('confidence', 'N/A').title()} |")
-        parts.append(f"| **Headlines Analysed** | {sentiment.get('headline_count', 0)} |")
-        parts.append(f"| **Processing Time** | {sentiment.get('elapsed_ms', 0)} ms |\n")
-
-        parts.append("### Distribution")
-        parts.append(f"- 🟢 Positive: **{dist.get('positive', 0)*100:.1f}%**")
-        parts.append(f"- ⚪ Neutral:  **{dist.get('neutral', 0)*100:.1f}%**")
-        parts.append(f"- 🔴 Negative: **{dist.get('negative', 0)*100:.1f}%**\n")
-
-        summary = sentiment.get("summary", "")
-        if summary:
-            parts.append(f"### 📝 Summary\n{summary}\n")
-
-        top = sentiment.get("top_headlines", [])
-        if top:
-            parts.append("### 📰 Top Headlines")
-            for i, h in enumerate(top, 1):
-                parts.append(f"{i}. {h}")
-            parts.append("")
-
-    # ── RAG / SQL / Chart blocks (extensible) ────────────────────────────────
-    rag_answer = state.get("rag_answer") or state.get("answer")
-    if rag_answer:
-        parts.append(f"## 📚 Research Answer\n{rag_answer}\n")
-
-    sql_result = state.get("sql_result") or state.get("sql_answer")
-    if sql_result:
-        parts.append(f"## 🗄️ Data Query Result\n```\n{sql_result}\n```\n")
-
-    final_report = state.get("final_report") or state.get("report")
-    if final_report and final_report not in (rag_answer, sql_result):
-        parts.append(f"## 📋 Final Report\n{final_report}\n")
-
-    if len(parts) <= 2:
-        parts.append("_No structured output was produced by the pipeline._")
-
-    return "\n".join(parts)
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Example queries
-# ─────────────────────────────────────────────────────────────────────────────
-_EXAMPLES = [
-    ["What is the current sentiment for Apple (AAPL)?", None],
-    ["Is TSLA bullish or bearish right now?", None],
-    ["Give me a sentiment analysis of NVDA", None],
-    ["How is Microsoft stock performing sentiment-wise?", None],
-    ["What is the market sentiment for Amazon?", None],
-]
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Gradio UI
-# ─────────────────────────────────────────────────────────────────────────────
-def build_ui() -> gr.Blocks:
-    """Construct and return the Gradio Blocks interface."""
-
-    custom_css = """
-    .finsight-header {
-        text-align: center;
-        padding: 1.5rem 0 0.5rem 0;
-        border-bottom: 2px solid #e5e7eb;
-        margin-bottom: 1rem;
+    # ✅ normalize properly
+    return {
+        "sentiment": {
+            "label": raw.get("sentiment_result", {}).get("trend", "neutral"),
+            "score": raw.get("sentiment_result", {}).get("score", 0),
+            "summary": raw.get("sentiment_result", {}).get("summary", "")
+        },
+        "headlines": [
+            {"title": h, "source": "Yahoo Finance", "url": ""}
+            for h in raw.get("sentiment_result", {}).get("top_headlines", [])
+        ],
+        "rag": None,
+        "sql": None,
+        "forecast": None,
+        "trace": [
+            {"agent": "SentimentAgent", "status": "success", "detail": t}
+            for t in raw.get("trace_log", [])
+        ]
     }
-    .report-panel { font-size: 0.95rem; }
-    .trace-panel  { font-family: monospace; font-size: 0.82rem; }
-    .status-bar   { font-size: 0.78rem; color: #6b7280; }
+
+
+def _normalize(raw: dict) -> dict:
     """
+    Coerce whatever the agent returns into the standard result schema.
+    Keeps UI code free of agent-specific quirks.
+    """
+    return {
+        "sentiment":  raw.get("sentiment",  {}),
+        "headlines":  raw.get("headlines",  []),
+        "rag":        raw.get("rag",        None),
+        "sql":        raw.get("sql",        None),
+        "forecast":   raw.get("forecast",   None),
+        "trace":      raw.get("trace",      []),
+    }
 
-    with gr.Blocks(
-        title="FinSight AI",
-        theme=gr.themes.Soft(primary_hue="blue", neutral_hue="slate"),
-        css=custom_css,
-    ) as demo:
 
-        # ── Header ────────────────────────────────────────────────────────────
-        gr.HTML("""
-        <div class="finsight-header">
-            <h1>📈 FinSight AI</h1>
-            <p style="color:#6b7280; margin:0;">
-                Multi-Agent Financial Intelligence Platform
-            </p>
-        </div>
-        """)
+# ─────────────────────────────────────────────
+# UI helpers
+# ─────────────────────────────────────────────
 
-        # ── Input row ────────────────────────────────────────────────────────
-        with gr.Row():
-            with gr.Column(scale=3):
-                query_box = gr.Textbox(
-                    label="💬 Financial Query",
-                    placeholder="e.g. 'What is NVDA sentiment?'",
-                    lines=3
+SENTIMENT_EMOJI = {
+    "positive": "🟢",
+    "neutral":  "🟡",
+    "negative": "🔴",
+}
+
+SCORE_BAR_WIDTH = 20  # chars for ASCII progress bar
+
+
+def _score_bar(score: float) -> str:
+    """Render a simple ASCII confidence bar."""
+    filled = round(score * SCORE_BAR_WIDTH)
+    return f"[{'█' * filled}{'░' * (SCORE_BAR_WIDTH - filled)}] {score:.0%}"
+
+
+def _sentiment_block(sentiment: dict) -> str:
+    """Format the sentiment section as clean Markdown."""
+    if not sentiment:
+        return "_No sentiment data available._"
+
+    label = sentiment.get("label", "unknown").lower()
+    score = float(sentiment.get("score", 0))
+    summary = sentiment.get("summary", "")
+    emoji = SENTIMENT_EMOJI.get(label, "⚪")
+
+    lines = [
+        f"## 📊 Sentiment Analysis",
+        "",
+        f"**Verdict:** {emoji} `{label.upper()}`",
+        f"**Confidence:** {_score_bar(score)}",
+    ]
+    if summary:
+        lines += ["", "---", "", f"> {summary}"]
+    return "\n".join(lines)
+
+
+def _headlines_block(headlines: list) -> str:
+    """Format top headlines as a Markdown list."""
+    if not headlines:
+        return ""
+
+    lines = ["## 🗞️ Key Headlines", ""]
+    for i, h in enumerate(headlines[:5], 1):
+        title  = h.get("title",  "Untitled")
+        source = h.get("source", "Unknown")
+        url    = h.get("url",    "")
+        if url:
+            lines.append(f"{i}. [{title}]({url}) — *{source}*")
+        else:
+            lines.append(f"{i}. **{title}** — *{source}*")
+    return "\n".join(lines)
+
+
+def _supplemental_block(result: dict) -> str:
+    """
+    Placeholder sections for future agents.
+    Shown only when data is actually present — never breaks if missing.
+    """
+    parts = []
+
+    if result.get("rag"):
+        parts.append(f"## 🔍 RAG Insights\n\n{result['rag']}")
+
+    if result.get("sql"):
+        parts.append(f"## 🗄️ SQL Findings\n\n{result['sql']}")
+
+    if result.get("forecast"):
+        parts.append(f"## 📈 Forecast\n\n{result['forecast']}")
+
+    return "\n\n---\n\n".join(parts)
+
+
+async def _render_trace(trace: list) -> None:
+    """Render execution trace as a collapsible Chainlit Step."""
+    if not trace:
+        return
+
+    async with cl.Step(name="🔍 Execution Trace", type="tool") as step:
+        lines = []
+        for entry in trace:
+            agent  = entry.get("agent",  "unknown")
+            status = entry.get("status", "done")
+            detail = entry.get("detail", "")
+            icon   = "✅" if status == "success" else "⚠️" if status == "warning" else "❌"
+            lines.append(f"{icon} **{agent}** — {detail}")
+        step.output = "\n".join(lines)
+
+
+async def _render_result(result: dict) -> None:
+    """Compose and send all UI sections for a successful pipeline run."""
+
+    # 1. Sentiment block (always shown)
+    sentiment_md = _sentiment_block(result["sentiment"])
+    await cl.Message(content=sentiment_md).send()
+
+    # 2. Headlines (shown only if present)
+    headlines_md = _headlines_block(result["headlines"])
+    if headlines_md:
+        await cl.Message(content=headlines_md).send()
+
+    # 3. Supplemental agent outputs (future-proofed)
+    supplemental = _supplemental_block(result)
+    if supplemental:
+        await cl.Message(content=supplemental).send()
+
+    # 4. Execution trace (collapsible)
+    await _render_trace(result.get("trace", []))
+
+
+# ─────────────────────────────────────────────
+# Chainlit lifecycle hooks
+# ─────────────────────────────────────────────
+
+@cl.on_chat_start
+async def on_chat_start():
+    """Greet the user and set session metadata."""
+    cl.user_session.set("ready", True)
+
+    await cl.Message(
+        content=(
+            "## 👋 Welcome to **FinSight AI**\n\n"
+            "I analyze financial sentiment, surface key headlines, and (soon) "
+            "deliver RAG-powered insights, SQL analytics, and price forecasts.\n\n"
+            "**Ask me anything about a stock, sector, or financial event.**\n"
+            "_Optionally attach an image (chart, screenshot) for richer analysis._"
+        )
+    ).send()
+
+
+@cl.on_message
+async def on_message(message: cl.Message):
+    """
+    Main message handler.
+
+    Flow:
+      1. Extract query + optional image path
+      2. Show a 'thinking' indicator via cl.Step
+      3. Call run_pipeline()
+      4. Render structured results
+      5. Handle and display errors gracefully
+    """
+    query = message.content.strip()
+    if not query:
+        await cl.Message(content="⚠️ Please enter a query before submitting.").send()
+        return
+
+    # Extract image path from attachments (first image wins)
+    image_path: Optional[str] = None
+    for element in message.elements:
+        if hasattr(element, "path") and element.path:
+            suffix = Path(element.path).suffix.lower()
+            if suffix in {".png", ".jpg", ".jpeg", ".gif", ".webp"}:
+                image_path = element.path
+                break
+
+    # ── Thinking indicator ──────────────────────────────────────────────────
+    async with cl.Step(name="⚙️ FinSight is thinking…", type="run") as thinking:
+        thinking.input = query
+        try:
+            result = await run_pipeline(query, image_path)
+            thinking.output = "Pipeline completed successfully."
+        except Exception as exc:
+            thinking.output = f"Pipeline error: {exc}"
+            error_detail = traceback.format_exc()
+            await cl.Message(
+                content=(
+                    f"❌ **An error occurred while processing your query.**\n\n"
+                    f"```\n{error_detail}\n```\n\n"
+                    "Please try again or contact support."
                 )
+            ).send()
+            return
 
-            with gr.Column(scale=1):
-                gr.Markdown("### 📎 Upload (Optional)")
-                image_upload = gr.Image(
-                    type="filepath",
-                    height=120,
-                    container=True
-                )
-
-        with gr.Row():
-            analyse_btn = gr.Button(
-                "🔍  Analyse",
-                variant="primary",
-                size="lg",
-                scale=2,
-            )
-            clear_btn = gr.Button("🗑️  Clear", variant="secondary", scale=1)
-
-        status_text = gr.Textbox(
-            label="",
-            value="Ready.",
-            interactive=False,
-            max_lines=1,
-            elem_classes=["status-bar"],
-        )
-
-        # ── Examples ─────────────────────────────────────────────────────────
-        gr.Examples(
-            examples=_EXAMPLES,
-            inputs=[query_box, image_upload],
-            label="💡 Example Queries",
-        )
-
-        gr.Markdown("---")
-
-        # ── Output row ───────────────────────────────────────────────────────
-        with gr.Row(equal_height=False):
-            with gr.Column(scale=3):
-                report_output = gr.Markdown(
-                    label="📊 Analysis Report",
-                    value="_Results will appear here after you submit a query._",
-                    elem_classes=["report-panel"],
-                )
-            with gr.Column(scale=2):
-                trace_output = gr.Markdown(
-                    label="🔎 Agent Trace",
-                    value="_Execution trace will appear here._",
-                    elem_classes=["trace-panel"],
-                )
-
-        # ── Chart row ────────────────────────────────────────────────────────
-        with gr.Row():
-            chart_output = gr.Image(
-                label="📈 Generated Chart",
-                visible=False,
-                height=400,
-            )
-
-        # ─────────────────────────────────────────────────────────────────────
-        # Event wiring
-        # ─────────────────────────────────────────────────────────────────────
-        def on_analyse(query: str, image_path: Optional[str]):
-            """Wrapper that updates the status bar and toggles chart visibility."""
-            yield (
-                gr.update(value="⏳ Running pipeline — please wait..."),
-                gr.update(value="_Analysing..._"),
-                gr.update(value="_Analysing..._"),
-                gr.update(visible=False, value=None),
-            )
-
-            report, trace, chart = run_pipeline(query, image_path)
-
-            yield (
-                gr.update(value="✅ Analysis complete."),
-                gr.update(value=report),
-                gr.update(value=trace),
-                gr.update(visible=chart is not None, value=chart),
-            )
-
-        analyse_btn.click(
-            fn=on_analyse,
-            inputs=[query_box, image_upload],
-            outputs=[status_text, report_output, trace_output, chart_output],
-        )
-
-        query_box.submit(
-            fn=on_analyse,
-            inputs=[query_box, image_upload],
-            outputs=[status_text, report_output, trace_output, chart_output],
-        )
-
-        def on_clear():
-            return (
-                "",
-                None,
-                "Ready.",
-                "_Results will appear here after you submit a query._",
-                "_Execution trace will appear here._",
-                gr.update(visible=False, value=None),
-            )
-
-        clear_btn.click(
-            fn=on_clear,
-            inputs=[],
-            outputs=[query_box, image_upload, status_text,
-                     report_output, trace_output, chart_output],
-        )
-
-    return demo
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Entry point
-# ─────────────────────────────────────────────────────────────────────────────
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="FinSight AI — Gradio UI")
-    parser.add_argument("--share",  action="store_true", help="Create public Gradio link")
-    parser.add_argument("--port",   type=int, default=7860, help="Local port (default 7860)")
-    parser.add_argument("--host",   type=str, default="0.0.0.0", help="Bind host")
-    args = parser.parse_args()
-
-    demo = build_ui()
-    demo.launch(
-        server_name=args.host,
-        server_port=args.port,
-        share=args.share,
-        show_error=True,
-    )
+    # ── Render structured output ────────────────────────────────────────────
+    await _render_result(result)

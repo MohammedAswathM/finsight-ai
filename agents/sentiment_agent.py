@@ -321,14 +321,16 @@ def generate_summary(ticker: str, agg: dict, trend: str, scored: list[ScoredHead
 # ─────────────────────────────────────────────────────────────────────────────
 # MAIN AGENT ENTRY POINT
 # ─────────────────────────────────────────────────────────────────────────────
-def run(state: AgentState) -> AgentState:
+trace_strings = []
+def run(state: AgentState) -> dict:
     """
     FinSight Sentiment Agent entry point.
 
-    Reads:   state["query"]
-    Writes:  state["sentiment_result"], state["trace_log"]
+    Returns ONLY delta (LangGraph rule)
     """
-    trace: list[dict] = state.get("trace_log", [])
+
+    trace: list[dict] = []
+    trace_strings: list[str] = []
 
     def log_trace(agent: str, action: str, detail: str = "") -> None:
         entry = {
@@ -338,52 +340,58 @@ def run(state: AgentState) -> AgentState:
             "time":   round(time.time(), 3),
         }
         trace.append(entry)
+
+        # ✅ IMPORTANT FIX → string trace
+        trace_strings.append(f"{agent} | {action} | {detail}")
+
         logger.info("[TRACE] %s | %s | %s", agent, action, detail)
 
     agent_name = "SentimentAgent"
     t_start = time.perf_counter()
     log_trace(agent_name, "start", f"query='{state.get('query', '')}'")
 
-    # ── Extract ticker ───────────────────────────────────────────────────────
+    # ── Extract ticker ──
     query: str = state.get("query", "").strip()
     if not query:
         log_trace(agent_name, "error", "Empty query")
-        state["sentiment_result"] = _empty_result("UNKNOWN", "No query provided.")
-        state["trace_log"] = trace
-        return state
+        return {
+            "sentiment_result": _empty_result("UNKNOWN", "No query provided."),
+            "trace_log": trace_strings
+        }
 
     ticker = extract_ticker(query)
     log_trace(agent_name, "ticker_extracted", f"ticker={ticker}")
 
-    # ── Fetch headlines ──────────────────────────────────────────────────────
+    # ── Fetch headlines ──
     raw_headlines = fetch_headlines(ticker)
     log_trace(agent_name, "headlines_fetched", f"raw_count={len(raw_headlines)}")
 
     if not raw_headlines:
         log_trace(agent_name, "warning", "No headlines found")
-        state["sentiment_result"] = _empty_result(ticker, "No headlines found.")
-        state["trace_log"] = trace
-        return state
+        return {
+            "sentiment_result": _empty_result(ticker, "No headlines found."),
+            "trace_log": trace_strings
+        }
 
-    # ── Deduplicate ──────────────────────────────────────────────────────────
+    # ── Deduplicate ──
     headlines = deduplicate_headlines(raw_headlines)
     log_trace(agent_name, "deduplication_complete", f"unique_count={len(headlines)}")
 
-    # ── FinBERT inference ────────────────────────────────────────────────────
+    # ── Sentiment ──
     scored = analyze_sentiment(headlines)
     log_trace(agent_name, "sentiment_scored", f"scored={len(scored)} headlines")
 
-    # ── Aggregate ────────────────────────────────────────────────────────────
+    # ── Aggregate ──
     agg = aggregate_scores(scored)
     trend = detect_trend(agg)
     log_trace(agent_name, "aggregation_complete",
               f"score={agg['weighted_score']:+.3f} trend={trend} confidence={agg['confidence']}")
 
-    # ── Summary ──────────────────────────────────────────────────────────────
+    # ── Summary ──
     summary = generate_summary(ticker, agg, trend, scored)
     log_trace(agent_name, "summary_generated")
 
-    # ── Top headlines (highest FinBERT confidence) ───────────────────────────
+    # ── Top headlines ──
     top_headlines = [
         s.headline for s in sorted(scored, key=lambda s: s.score, reverse=True)[:5]
     ]
@@ -391,19 +399,21 @@ def run(state: AgentState) -> AgentState:
     elapsed_ms = round((time.perf_counter() - t_start) * 1000, 1)
     log_trace(agent_name, "complete", f"elapsed={elapsed_ms}ms")
 
-    state["sentiment_result"] = {
-        "score":          agg["weighted_score"],
-        "trend":          trend,
-        "confidence":     agg["confidence"],
-        "distribution":   agg["distribution"],
-        "summary":        summary,
-        "top_headlines":  top_headlines,
-        "headline_count": len(scored),
-        "ticker":         ticker,
-        "elapsed_ms":     elapsed_ms,
+    # ✅ FINAL RETURN (delta only)
+    return {
+        "sentiment_result": {
+            "score":          agg["weighted_score"],
+            "trend":          trend,
+            "confidence":     agg["confidence"],
+            "distribution":   agg["distribution"],
+            "summary":        summary,
+            "top_headlines":  top_headlines,
+            "headline_count": len(scored),
+            "ticker":         ticker,
+            "elapsed_ms":     elapsed_ms,
+        },
+        "trace_log": trace_strings
     }
-    state["trace_log"] = trace
-    return state
 
 
 # ─────────────────────────────────────────────────────────────────────────────
