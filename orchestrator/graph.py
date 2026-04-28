@@ -186,6 +186,7 @@ def build_graph() -> StateGraph:
     graph.add_edge("rag", "evaluator")
     graph.add_edge("chart", "evaluator")
     graph.add_edge("sentiment", "evaluator")
+    graph.add_edge("fraud", "evaluator")
     graph.add_edge("forecast", "evaluator")
 
     # Reflection loop.
@@ -222,6 +223,7 @@ def run_graph(inputs: Dict[str, Any]) -> AgentState:
         "sql_result": None,
         "chart_path": None,
         "sentiment_result": None,
+        "transaction_features": None,
         "fraud_score": None,
         "forecast": None,
         "eval_score": None,

@@ -35,6 +35,9 @@ class AgentState(TypedDict, total=False):
     # --- SENTIMENT (Member 4) ---
     sentiment_result: Optional[str]
 
+    # --- FRAUD DETECTION (Member 1) ---
+    transaction_features: Optional[Dict[str, float]]  # Kaggle credit card fraud features
+
     # --- ML MODEL OUTPUTS (AIML Infra) ---
     fraud_score: Optional[Dict]      # {"fraud_probability", "is_fraud", "risk_level"}
     forecast: Optional[Dict]         # {"direction", "confidence", "days_ahead"}
