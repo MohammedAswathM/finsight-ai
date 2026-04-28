@@ -1,51 +1,41 @@
 """
-FinSight AI — Shared State Contract.
-
-This is the single source of truth passed between every node in the LangGraph.
-DO NOT modify without notifying all team members (see FINSIGHT_AI_BRAIN.md §7).
-
-Key best-practice note: `trace_log` uses `operator.add` as a reducer so parallel
-agent branches (rag / sql / sentiment / forecast) can all append to it without
-clobbering each other's updates. Without this, LangGraph raises
-InvalidUpdateError when multiple parallel nodes write to the same key.
+state.py — Shared AgentState TypedDict for FinSight AI orchestrator.
+All agents read/write from this single state object.
+DO NOT MODIFY WITHOUT NOTIFYING ALL MEMBERS.
 """
-from __future__ import annotations
 
-import operator
-from typing import Annotated, Dict, List, Optional, TypedDict
+from typing import TypedDict, Optional, List, Dict
 
 
-class AgentState(TypedDict, total=False):
-    # --- INPUT ---
-    query: str
-    image_data: Optional[str]
+class AgentState(TypedDict):
+    # INPUT
+    query: str                        # original user question — never modify this
 
-    # --- PLANNING (Member 3) ---
-    plan: Optional[List[str]]
-    agents_to_call: Optional[List[str]]
+    # PLANNING
+    plan: Optional[List[str]]         # planner's list of sub-tasks
+    agents_to_call: Optional[List[str]]  # which agents the planner decided to invoke
 
-    # --- RAG (Member 1) ---
-    rag_result: Optional[str]
-    sources: Optional[List[str]]
+    # AGENT OUTPUTS
+    rag_result: Optional[str]         # cited text from SEC filings
+    sources: Optional[List[str]]      # list of source citations from RAG
 
-    # --- SQL + CHART (Member 2) ---
-    sql_result: Optional[str]
-    chart_path: Optional[str]
+    sql_result: Optional[str]         # structured data from SQLite query
+    chart_path: Optional[str]         # file path to generated chart PNG
 
-    # --- SENTIMENT (Member 4) ---
-    sentiment_result: Optional[str]
+    sentiment_result: Optional[str]   # sentiment score + summary string
+    image_data: Optional[str]         # base64 encoded user-uploaded image
 
-    # --- ML MODEL OUTPUTS (AIML Infra) ---
-    fraud_score: Optional[Dict]      # {"fraud_probability", "is_fraud", "risk_level"}
-    forecast: Optional[Dict]         # {"direction", "confidence", "days_ahead"}
+    # ML MODEL OUTPUTS (AIML Infra course)
+    fraud_score: Optional[Dict]       # {"fraud_probability": 0.87, "risk_level": "HIGH", "is_fraud": True}
+    forecast: Optional[Dict]          # {"direction": "UP", "confidence": 0.74, "days_ahead": 5}
 
-    # --- EVALUATION + CONTROL (Member 3) ---
-    eval_score: Optional[float]
-    eval_feedback: Optional[str]
-    retry_count: int
+    # EVALUATION + CONTROL FLOW
+    eval_score: Optional[float]       # critic's quality score 0.0–1.0
+    eval_feedback: Optional[str]      # critic's explanation of what was weak
+    retry_count: int                  # how many reflection loops have run (start at 0)
 
-    # --- FINAL OUTPUT (Member 3) ---
-    final_report: Optional[str]
+    # FINAL OUTPUT
+    final_report: Optional[str]       # synthesized final answer shown to user
 
-    # --- TRACE LOG — reducer allows parallel appends ---
-    trace_log: Annotated[List[str], operator.add]
+    # TRACE LOG (for UI display)
+    trace_log: Optional[List[str]]    # list of strings describing what each agent did
