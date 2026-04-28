@@ -64,6 +64,16 @@ def _compute_metrics(eval_pred) -> Dict[str, float]:
     }
 
 
+def _eval_base_against_fpb(base_preds, y_true) -> Tuple[Dict[str, float], np.ndarray]:
+    """Score ProsusAI/finbert predictions against Financial PhraseBank labels."""
+    y_pred = np.array([BASE_TO_FPB[int(p)] for p in base_preds])
+    metrics = {
+        "accuracy": float(accuracy_score(y_true, y_pred)),
+        "f1_macro": float(f1_score(y_true, y_pred, average="macro")),
+    }
+    return metrics, confusion_matrix(y_true, y_pred, labels=[0, 1, 2])
+
+
 def _eval_model(
     model_name_or_path: str,
     tokenized_test,
@@ -86,17 +96,18 @@ def _eval_model(
         compute_metrics=_compute_metrics,
         eval_dataset=tokenized_test,
     )
-    out = trainer.evaluate()
     preds = trainer.predict(tokenized_test).predictions
     y_pred = np.argmax(preds, axis=-1)
     y_true = np.array(tokenized_test["label"])
-    
-    # Remap base model predictions from ProsusAI/finbert to Financial PhraseBank labels
+
     if is_base_model:
-        y_pred = np.array([BASE_TO_FPB[int(p)] for p in y_pred])
-    
+        return _eval_base_against_fpb(y_pred, y_true)
+
     cm = confusion_matrix(y_true, y_pred, labels=[0, 1, 2])
-    metrics = {"accuracy": float(out.get("eval_accuracy", 0.0)), "f1_macro": float(out.get("eval_f1_macro", 0.0))}
+    metrics = {
+        "accuracy": float(accuracy_score(y_true, y_pred)),
+        "f1_macro": float(f1_score(y_true, y_pred, average="macro")),
+    }
     return metrics, cm
 
 

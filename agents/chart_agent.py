@@ -29,9 +29,6 @@ DB_PATH = Path(__file__).parent.parent / "outputs" / "finsight.db"
 OUTPUT_DIR = Path(__file__).parent.parent / "outputs"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-# Use forward slashes for cross-platform compatibility in generated code
-OUTPUT_DIR_STR = str(OUTPUT_DIR).replace("\\", "/")
-
 
 class ChartAgent:
     """Generates matplotlib charts from financial data."""
@@ -129,108 +126,77 @@ class ChartAgent:
         
         return df
     
-    def _generate_chart_code(self, df: pd.DataFrame, chart_type: str, ticker: str) -> str:
-        """Generate matplotlib code for the chart."""
-        if df.empty:
-            return "print('No data available')"
-        
-        # Determine columns to plot
+    def _save_chart(self, df: pd.DataFrame, chart_type: str, ticker: str) -> str:
+        """Generate and save a chart, returning the relative output path."""
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.dates as mdates
+        import matplotlib.pyplot as plt
+
         has_volume = 'volume' in df.columns
         has_ohlc = all(col in df.columns for col in ['open', 'high', 'low', 'close'])
-        
+
+        chart_path = OUTPUT_DIR / f"chart_{ticker}_{int(time.time())}.png"
+        dates = pd.to_datetime(df['date'])
+
         if chart_type == "volume" and has_volume:
-            return f"""
-import matplotlib.pyplot as plt
-import matplotlib.dates as mdates
+            fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 8), sharex=True)
+            ax1.plot(dates, df['close'], color='#2196F3', linewidth=1.5)
+            ax1.set_ylabel('Price ($)', fontsize=12)
+            ax1.set_title(f'{ticker} - Closing Price', fontsize=14, fontweight='bold')
+            ax1.grid(True, alpha=0.3)
+            ax1.fill_between(dates, df['close'], alpha=0.2, color='#2196F3')
 
-fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 8), sharex=True)
+            ax2.bar(dates, df['volume'] / 1e6, color='#FF9800', alpha=0.7, width=1)
+            ax2.set_ylabel('Volume (Millions)', fontsize=12)
+            ax2.set_xlabel('Date', fontsize=12)
+            ax2.grid(True, alpha=0.3)
+            ax2.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
+            ax2.xaxis.set_major_locator(mdates.MonthLocator(interval=1))
 
-# Price line
-ax1.plot(pd.to_datetime(df['date']), df['close'], color='#2196F3', linewidth=1.5)
-ax1.set_ylabel('Price ($)', fontsize=12)
-ax1.set_title('{ticker} - Closing Price', fontsize=14, fontweight='bold')
-ax1.grid(True, alpha=0.3)
-ax1.fill_between(pd.to_datetime(df['date']), df['close'], alpha=0.2, color='#2196F3')
-
-# Volume bars
-ax2.bar(pd.to_datetime(df['date']), df['volume']/1e6, color='#FF9800', alpha=0.7, width=1)
-ax2.set_ylabel('Volume (Millions)', fontsize=12)
-ax2.set_xlabel('Date', fontsize=12)
-ax2.grid(True, alpha=0.3)
-
-ax2.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
-ax2.xaxis.set_major_locator(mdates.MonthLocator(interval=1))
-plt.xticks(rotation=45)
-
-plt.tight_layout()
-chart_filename = f'chart_{ticker}_{int(time.time())}.png'
-plt.savefig(OUTPUT_DIR_STR + '/' + chart_filename, dpi=150, bbox_inches='tight')
-print(f'Chart saved to outputs/{chart_filename}')
-"""
-        
         elif chart_type == "candlestick" and has_ohlc:
-            return f"""
-import matplotlib.pyplot as plt
-import matplotlib.dates as mdates
-import numpy as np
+            fig, ax = plt.subplots(figsize=(14, 7))
+            opens = df['open'].values
+            highs = df['high'].values
+            lows = df['low'].values
+            closes = df['close'].values
+            colors = ['#26A69A' if close >= open_price else '#EF5350' for close, open_price in zip(closes, opens)]
 
-fig, ax = plt.subplots(figsize=(14, 7))
+            for i in range(len(df)):
+                ax.plot([dates[i], dates[i]], [lows[i], highs[i]], color=colors[i], linewidth=0.5)
+                ax.add_patch(plt.Rectangle(
+                    (mdates.date2num(dates[i]) - 0.3, min(opens[i], closes[i])),
+                    0.6,
+                    abs(closes[i] - opens[i]),
+                    facecolor=colors[i],
+                    edgecolor=colors[i],
+                    linewidth=0.5,
+                ))
 
-dates = pd.to_datetime(df['date'])
-opens = df['open'].values
-highs = df['high'].values
-lows = df['low'].values
-closes = df['close'].values
+            ax.set_xlabel('Date', fontsize=12)
+            ax.set_ylabel('Price ($)', fontsize=12)
+            ax.set_title(f'{ticker} - Candlestick Chart', fontsize=14, fontweight='bold')
+            ax.grid(True, alpha=0.3)
+            ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
+            ax.xaxis.set_major_locator(mdates.MonthLocator(interval=1))
 
-# Calculate colors
-colors = ['#26A69A' if close >= open_price else '#EF5350' for close, open_price in zip(closes, opens)]
+        else:
+            fig, ax = plt.subplots(figsize=(12, 6))
+            ax.plot(dates, df['close'], color='#2196F3', linewidth=2, label='Close Price')
+            ax.fill_between(dates, df['close'], alpha=0.2, color='#2196F3')
+            ax.set_xlabel('Date', fontsize=12)
+            ax.set_ylabel('Price ($)', fontsize=12)
+            ax.set_title(f'{ticker} - Closing Price History', fontsize=14, fontweight='bold')
+            ax.grid(True, alpha=0.3)
+            ax.legend(loc='upper left')
+            ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
+            ax.xaxis.set_major_locator(mdates.MonthLocator(interval=1))
 
-# Plot candlesticks
-for i in range(len(df)):
-    ax.plot([dates[i], dates[i]], [lows[i], highs[i]], color=colors[i], linewidth=0.5)
-    ax.add_patch(plt.Rectangle((mdates.date2num(dates[i]) - 0.3, min(opens[i], closes[i])),
-                                0.6, abs(closes[i] - opens[i]),
-                                facecolor=colors[i], edgecolor=colors[i], linewidth=0.5))
-
-ax.set_xlabel('Date', fontsize=12)
-ax.set_ylabel('Price ($)', fontsize=12)
-ax.set_title('{ticker} - Candlestick Chart', fontsize=14, fontweight='bold')
-ax.grid(True, alpha=0.3)
-ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
-ax.xaxis.set_major_locator(mdates.MonthLocator(interval=1))
-plt.xticks(rotation=45)
-
-plt.tight_layout()
-chart_filename = f'chart_{ticker}_{int(time.time())}.png'
-plt.savefig(OUTPUT_DIR_STR + '/' + chart_filename, dpi=150, bbox_inches='tight')
-print(f'Chart saved to outputs/{chart_filename}')
-"""
-        
-        else:  # Default line chart
-            return f"""
-import matplotlib.pyplot as plt
-import matplotlib.dates as mdates
-
-fig, ax = plt.subplots(figsize=(12, 6))
-
-ax.plot(pd.to_datetime(df['date']), df['close'], color='#2196F3', linewidth=2, label='Close Price')
-ax.fill_between(pd.to_datetime(df['date']), df['close'], alpha=0.2, color='#2196F3')
-
-ax.set_xlabel('Date', fontsize=12)
-ax.set_ylabel('Price ($)', fontsize=12)
-ax.set_title('{ticker} - Closing Price History', fontsize=14, fontweight='bold')
-ax.grid(True, alpha=0.3)
-ax.legend(loc='upper left')
-
-ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
-ax.xaxis.set_major_locator(mdates.MonthLocator(interval=1))
-plt.xticks(rotation=45)
-
-plt.tight_layout()
-chart_filename = f'chart_{ticker}_{int(time.time())}.png'
-plt.savefig(OUTPUT_DIR_STR + '/' + chart_filename, dpi=150, bbox_inches='tight')
-print(f'Chart saved to outputs/{chart_filename}')
-"""
+        plt.xticks(rotation=45)
+        plt.tight_layout()
+        fig.savefig(chart_path, dpi=150, bbox_inches='tight')
+        plt.close(fig)
+        return f"outputs/{chart_path.name}"
     
     def run(self, query: str, sql_result: str = "") -> str:
         """Generate a chart based on the query.
@@ -258,22 +224,7 @@ print(f'Chart saved to outputs/{chart_filename}')
             if df.empty:
                 return "Error: No data available for the specified query."
             
-            # Generate chart code
-            chart_code = self._generate_chart_code(df, chart_type, ticker)
-            
-            # Execute the chart code safely with correct imports.
-            import matplotlib
-            matplotlib.use("Agg")  # headless backend (CI/servers)
-            import matplotlib.dates as mdates
-            import matplotlib.pyplot as plt
-            import numpy as np
-
-            local_vars = {"df": df, "OUTPUT_DIR_STR": OUTPUT_DIR_STR, "pd": pd, "ticker": ticker, "time": time}
-            exec(chart_code, {"plt": plt, "mdates": mdates, "np": np, "pd": pd}, local_vars)
-            
-            # Get the actual chart filename that was generated
-            chart_filename = local_vars.get("chart_filename", "chart.png")
-            return f"outputs/{chart_filename}"
+            return self._save_chart(df, chart_type, ticker)
             
         except Exception as e:
             return f"Error generating chart: {str(e)}"
