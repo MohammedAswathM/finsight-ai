@@ -1,8 +1,8 @@
 """
 Train fraud detection models using the Kaggle credit card fraud dataset.
 
-This script trains both XGBoost and LightGBM classifiers, handles class
-imbalance with SMOTE, evaluates both models, logs metrics to MLflow, and
+This script trains scikit-learn classifiers (Random Forest, Logistic Regression, SVM),
+handles class imbalance with SMOTE, evaluates all models, logs metrics to MLflow, and
 saves the best model as a joblib artifact.
 
 Expected dataset path:
@@ -25,8 +25,9 @@ import mlflow.sklearn
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import roc_auc_score, f1_score, precision_score, recall_score
 from imblearn.over_sampling import SMOTE
-from xgboost import XGBClassifier
-from lightgbm import LGBMClassifier
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.svm import SVC
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA_PATH = ROOT / "data" / "creditcard.csv"
@@ -82,15 +83,14 @@ def train_models() -> tuple[dict, pd.DataFrame, pd.Series]:
     X_resampled, y_resampled = smote.fit_resample(X_train, y_train)
 
     models = {
-        "xgboost": XGBClassifier(
-            use_label_encoder=False,
-            eval_metric="logloss",
+        "random_forest": RandomForestClassifier(
+            n_estimators=100,
             n_jobs=min(8, multiprocessing.cpu_count()),
             random_state=42,
         ),
-        "lightgbm": LGBMClassifier(
-            n_jobs=min(8, multiprocessing.cpu_count()),
+        "logistic_regression": LogisticRegression(
             random_state=42,
+            max_iter=1000,
         ),
     }
 
@@ -98,7 +98,7 @@ def train_models() -> tuple[dict, pd.DataFrame, pd.Series]:
     trained_models: dict[str, object] = {}
 
     mlflow.set_experiment("fraud_detection")
-    mlflow.set_tracking_uri(str(ROOT / "mlruns"))
+    # Use default file-based tracking
 
     for name, model in models.items():
         print(f"Training {name}...")
