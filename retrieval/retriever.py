@@ -13,9 +13,8 @@ Builds the two-layer retrieval stack used by the RAG agent:
       prompts an LLM to pull out only the sentences directly relevant
       to the query, compressing noise and improving answer quality.
 
-      The extractor uses a **tiny free model** (google/flan-t5-small
-      via HuggingFace pipeline) so no paid API key is required.
-      Swap in any OpenAI/Anthropic model here if you have a key.
+      The extractor uses the shared Groq stack locally. If Groq cannot
+      be loaded, compression is disabled and the parent retriever is returned.
 
 Public API
 ----------
@@ -43,36 +42,16 @@ def _get_compression_llm():
     """
     Returns a LangChain-compatible LLM for the extractor.
 
-    Priority:
-      1. OpenAI GPT-3.5 if OPENAI_API_KEY is set
-      2. HuggingFace flan-t5-base pipeline (fully local, ~900 MB)
+    Uses the shared Groq stack only. If Groq cannot be loaded, the
+    compression layer is disabled and the parent retriever is returned.
     """
-    import os
-
-    openai_key = os.getenv("OPENAI_API_KEY")
-    if openai_key:
-        try:
-            from langchain_openai import ChatOpenAI
-            logger.info("Using OpenAI GPT-3.5-turbo for compression.")
-            return ChatOpenAI(temperature=0, model="gpt-3.5-turbo")
-        except ImportError:
-            pass
-
-    # Fallback: local HuggingFace pipeline
-    logger.info("No OPENAI_API_KEY found — using flan-t5-base for compression (local).")
     try:
-        from langchain_community.llms import HuggingFacePipeline
-        from transformers import pipeline as hf_pipeline
+        from langchain_groq import ChatGroq
 
-        pipe = hf_pipeline(
-            "text2text-generation",
-            model="google/flan-t5-small",
-            max_new_tokens=512,
-            device=-1,   # CPU
-        )
-        return HuggingFacePipeline(pipeline=pipe)
+        logger.info("Using Groq ChatGroq for compression.")
+        return ChatGroq(model="llama-3.3-70b-versatile", temperature=0)
     except Exception as exc:
-        logger.warning("Could not load flan-t5-small: %s. Compression disabled.", exc)
+        logger.warning("Could not load Groq compression model: %s. Compression disabled.", exc)
         return None
 
 

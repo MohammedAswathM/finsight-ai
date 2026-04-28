@@ -62,5 +62,10 @@ gradio
 # --- News / Sentiment Agent (Member 4) ---
 feedparser
 
+# --- Additional requirements for local ingestion and HTML parsing ---
+requests>=2.31.0
+beautifulsoup4>=4.12.0
+lxml>=5.0.0
+
 # --- Environment & Utilities ---
 python-dotenv

@@ -134,30 +134,28 @@ def run(state: AgentState) -> AgentState:
     """
     query = state.get("query", "").strip()
     if not query:
-        state["rag_result"] = "No query provided to RAG agent."
-        state["sources"]    = []
-        state["trace_log"] = state.get("trace_log", []) + ["RAG agent: no query provided"]
-        return state
+        return {
+            "rag_result": "No query provided to RAG agent.",
+            "sources": [],
+            "trace_log": ["RAG agent: no query provided"],
+        }
 
     logger.info("RAG agent — query: '%s'", query[:120])
 
     try:
         retriever = _ensure_retriever()
-        # For now, use direct vectorstore search since docstore is not persistent
-        from retrieval.vectorstore import get_vectorstore
-        vectorstore = get_vectorstore()
-        result = vectorstore.similarity_search(query, k=5)
-        state["rag_result"] = format_result(result)
-        state["sources"]    = [doc.metadata.get("source", "unknown") for doc in result]
-        state["trace_log"] = state.get("trace_log", []) + [
-            f"RAG agent: retrieved {len(result)} chunks from vector store"
-        ]
-    except Exception as e:
-        state["rag_result"] = f"RAG retrieval failed: {str(e)}"
-        state["sources"] = []
-        state["trace_log"] = state.get("trace_log", []) + [f"RAG agent: ERROR — {str(e)}"]
-
-    return state
+        docs = get_relevant_documents(query, retriever=retriever)
+        return {
+            "rag_result": format_result(docs),
+            "sources": [doc.metadata.get("source", "unknown") for doc in docs],
+            "trace_log": [f"RAG agent: retrieved {len(docs)} chunks from vector store"],
+        }
+    except Exception as exc:
+        return {
+            "rag_result": f"RAG retrieval failed: {str(exc)}",
+            "sources": [],
+            "trace_log": [f"RAG agent: ERROR — {str(exc)}"],
+        }
 
 
 # ── standalone test ────────────────────────────────────────────────────────
