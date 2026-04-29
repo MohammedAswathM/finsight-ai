@@ -29,6 +29,12 @@ python -m retrieval.ingest
 
 # 3. Test the agent standalone
 python agents/rag_agent.py
+
+# 4. (Optional) Train the fraud detection model
+# Download the dataset first:
+curl -L -o data/creditcard.csv "https://storage.googleapis.com/download.tensorflow.org/data/creditcard.csv"
+# Then train:
+python -m models.train_fraud
 ```
 
 ## Key Design Decisions

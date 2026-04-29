@@ -2,8 +2,8 @@
 
 Topology:
     planner -> {rag, sql, sentiment, forecast} (parallel fan-out)
-    sql     -> chart
-    {rag, chart, sentiment, forecast} -> evaluator
+    sql     -> {chart, fraud}
+    {rag, chart, fraud, sentiment, forecast} -> evaluator
     evaluator --conditional--> retry_bump -> planner   (loop)
                            \\-> synthesizer -> END
 
@@ -61,6 +61,21 @@ except Exception:  # noqa: BLE001
         return {
             "sentiment_result": "[stub] Sentiment agent not yet merged.",
             "trace_log": append_trace("Sentiment agent: STUB (awaiting Member 4 PR)"),
+        }
+
+try:
+    from agents.fraud_agent import run as fraud_run  # type: ignore
+except Exception:  # noqa: BLE001
+    def fraud_run(state: AgentState) -> Dict[str, Any]:
+        return {
+            "fraud_score": {
+                "fraud_probability": 0.0,
+                "is_fraud": False,
+                "risk_level": "LOW",
+                "confidence": 0.0,
+                "message": "Fraud agent: STUB (awaiting Member 1 PR)",
+            },
+            "trace_log": append_trace("Fraud agent: STUB (awaiting Member 1 PR)"),
         }
 
 
@@ -148,6 +163,7 @@ def build_graph() -> StateGraph:
     graph.add_node("sql", sql_run)
     graph.add_node("chart", chart_run)
     graph.add_node("sentiment", sentiment_run)
+    graph.add_node("fraud", fraud_run)
     graph.add_node("forecast", forecast_node)
     graph.add_node("evaluator", evaluator_node)
     graph.add_node("retry_bump", increment_retry)
@@ -162,13 +178,15 @@ def build_graph() -> StateGraph:
     graph.add_edge("planner", "sentiment")
     graph.add_edge("planner", "forecast")
 
-    # SQL -> chart (chart depends on sql's output)
+    # SQL -> chart and fraud. Fraud depends on SQL-populated transaction_features.
     graph.add_edge("sql", "chart")
+    graph.add_edge("sql", "fraud")
 
     # Converge at evaluator.
     graph.add_edge("rag", "evaluator")
     graph.add_edge("chart", "evaluator")
     graph.add_edge("sentiment", "evaluator")
+    graph.add_edge("fraud", "evaluator")
     graph.add_edge("forecast", "evaluator")
 
     # Reflection loop.
@@ -205,6 +223,7 @@ def run_graph(inputs: Dict[str, Any]) -> AgentState:
         "sql_result": None,
         "chart_path": None,
         "sentiment_result": None,
+        "transaction_features": None,
         "fraud_score": None,
         "forecast": None,
         "eval_score": None,
