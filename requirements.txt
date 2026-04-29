@@ -20,7 +20,6 @@ rank-bm25
 # --- Data & SQL (Member 2) ---
 yfinance
 pandas
-pandas-ta
 SQLAlchemy
 matplotlib
 

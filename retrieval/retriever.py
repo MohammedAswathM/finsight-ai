@@ -30,6 +30,7 @@ from langchain.retrievers import ContextualCompressionRetriever
 from langchain.retrievers.document_compressors import LLMChainExtractor
 from langchain.storage import InMemoryStore
 
+import config  # ensures load_dotenv() runs so GROQ_API_KEY is in os.environ
 from retrieval.vectorstore import get_vectorstore
 from retrieval.ingest import build_parent_document_retriever
 
@@ -48,8 +49,14 @@ def _get_compression_llm():
     try:
         from langchain_groq import ChatGroq
 
-        logger.info("Using Groq ChatGroq for compression.")
-        return ChatGroq(model="llama-3.3-70b-versatile", temperature=0)
+        from config import GROQ_API_KEY, GROQ_MODEL
+
+        if not GROQ_API_KEY:
+            logger.warning("GROQ_API_KEY not set — compression disabled.")
+            return None
+
+        logger.info("Using Groq ChatGroq (%s) for compression.", GROQ_MODEL)
+        return ChatGroq(model=GROQ_MODEL, temperature=0, api_key=GROQ_API_KEY)
     except Exception as exc:
         logger.warning("Could not load Groq compression model: %s. Compression disabled.", exc)
         return None

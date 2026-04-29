@@ -27,7 +27,7 @@ from typing import List
 
 from langchain_community.document_loaders import PyPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.storage import LocalFileStore
+from langchain.storage import LocalFileStore, create_kv_docstore
 from langchain.retrievers import ParentDocumentRetriever
 
 from retrieval.vectorstore import get_vectorstore, get_embeddings
@@ -186,7 +186,7 @@ def build_parent_document_retriever(vectorstore, docstore=None):
     Parent splitter → larger chunks stored in docstore for full context
     """
     if docstore is None:
-        docstore = LocalFileStore(BASE_DIR / "docstore")
+        docstore = create_kv_docstore(LocalFileStore(str(BASE_DIR / "docstore")))
 
     child_splitter = RecursiveCharacterTextSplitter(
         chunk_size=CHILD_CHUNK_SIZE,

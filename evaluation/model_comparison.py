@@ -8,7 +8,7 @@ import pandas as pd
 
 
 def _mlruns_roots() -> List[Path]:
-    return [Path("mlruns"), Path("C:/ProgramData/finsight-ai/mlruns"), Path("C:/finsight-ai/mlruns")]
+    return [Path("mlruns")]
 
 
 def _read_metrics(run_dir: Path) -> Dict[str, float]:

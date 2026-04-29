@@ -7,9 +7,15 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import sys
 import time
 from pathlib import Path
 from typing import Any
+
+# Chainlit loads this file as a script; ensure the project root is importable.
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
 
 import chainlit as cl
 
@@ -45,7 +51,8 @@ async def on_chat_start() -> None:
     await cl.Message(
         content=(
             "# FinSight AI\n"
-            "Ask a financial research question. You can also attach a chart image for the orchestrator state."
+            "Ask a financial research question. Optional: attach a single chart screenshot (PNG/JPG, ≤10 MB). "
+            "Other file types are not supported."
         )
     ).send()
 

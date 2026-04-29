@@ -164,7 +164,7 @@ def build_graph() -> StateGraph:
     graph.add_node("chart", chart_run)
     graph.add_node("sentiment", sentiment_run)
     graph.add_node("fraud", fraud_run)
-    graph.add_node("forecast", forecast_node)
+    graph.add_node("forecaster", forecast_node)
     graph.add_node("evaluator", evaluator_node)
     graph.add_node("retry_bump", increment_retry)
     graph.add_node("synthesizer", synthesizer_node)
@@ -176,7 +176,7 @@ def build_graph() -> StateGraph:
     graph.add_edge("planner", "rag")
     graph.add_edge("planner", "sql")
     graph.add_edge("planner", "sentiment")
-    graph.add_edge("planner", "forecast")
+    graph.add_edge("planner", "forecaster")
 
     # SQL -> chart and fraud. Fraud depends on SQL-populated transaction_features.
     graph.add_edge("sql", "chart")
@@ -187,7 +187,7 @@ def build_graph() -> StateGraph:
     graph.add_edge("chart", "evaluator")
     graph.add_edge("sentiment", "evaluator")
     graph.add_edge("fraud", "evaluator")
-    graph.add_edge("forecast", "evaluator")
+    graph.add_edge("forecaster", "evaluator")
 
     # Reflection loop.
     graph.add_conditional_edges(

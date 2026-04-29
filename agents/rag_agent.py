@@ -24,7 +24,7 @@ import os
 from pathlib import Path
 from typing import List
 
-from langchain.storage import LocalFileStore
+from langchain.storage import LocalFileStore, create_kv_docstore
 
 # ── make sure project root is on the path when running standalone ──────────
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -79,7 +79,7 @@ def _ensure_retriever():
         _docstore  = docstore_obj
     else:
         logger.info("Vector store contains %d chunks — skipping ingestion.", count)
-        _docstore  = LocalFileStore(BASE_DIR / "docstore")
+        _docstore  = create_kv_docstore(LocalFileStore(str(BASE_DIR / "docstore")))
         _retriever = build_retriever(
             vectorstore=vectorstore,
             docstore=_docstore,

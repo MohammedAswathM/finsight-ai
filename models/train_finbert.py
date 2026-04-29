@@ -166,7 +166,7 @@ def main() -> None:
             weight_decay=0.01,
             per_device_train_batch_size=16,
             per_device_eval_batch_size=32,
-            evaluation_strategy="epoch",
+            eval_strategy="epoch",
             save_strategy="no",
             logging_strategy="steps",
             logging_steps=50,

@@ -47,7 +47,9 @@ def run_ragas() -> pd.DataFrame:
         from langchain_groq import ChatGroq
         from ragas import evaluate
         from ragas.llms import LangchainLLMWrapper
-        from ragas.metrics import answer_relevancy, context_precision, faithfulness
+        from ragas.metrics import LLMContextPrecisionWithoutReference, answer_relevancy, faithfulness
+
+        context_precision = LLMContextPrecisionWithoutReference()
 
         groq_key = os.getenv("GROQ_API_KEY")
         if not groq_key:
