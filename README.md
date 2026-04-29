@@ -63,53 +63,6 @@ finsight-ai/
 └── FINSIGHT_AI_BRAIN.md   ← internal design document
 ```
 
-## First-time setup
-
-Requires **Python 3.12** on Windows / macOS / Linux. The project is verified on Windows 11. (Python 3.13 has a SciPy build issue; 3.11 has a `pandas-ta` issue — 3.12 is the sweet spot.)
-
-```bash
-# 1. Clone and enter
-git clone <repo-url>
-cd finsight-ai
-
-# 2. Create venv
-py -3.12 -m venv .venv
-.venv\Scripts\activate          # Windows
-# or: source .venv/bin/activate # macOS/Linux
-
-# 3. Install dependencies
-python -m pip install --upgrade pip
-pip install -r requirements.txt
-
-# 4. Configure environment
-copy .env.example .env          # Windows
-# or: cp .env.example .env      # macOS/Linux
-```
-
-Edit `.env` and set:
-
-- `GROQ_API_KEY` — required, get one free at https://console.groq.com/keys
-- `MLFLOW_TRACKING_URI=file:./mlruns` — already set in `.env.example`; do not leave blank on Windows (newer MLflow defaults to a SQLite URI that breaks on paths with spaces)
-- `OPENAI_API_KEY` — optional, only used if you want the multimodal image-upload demo
-
-## Build the data + model artifacts (one-time)
-
-```bash
-# SQLite price database (~30 s)
-python -m data.db_setup
-
-# SEC 10-K embeddings into ChromaDB (~5–10 min, ~90 MB download)
-python -m retrieval.ingest
-
-# Train the three ML models (each writes an MLflow run + a pickle)
-python -m models.train_fraud           # needs data/creditcard.csv from Kaggle first
-python -m models.train_forecaster
-python -m models.train_volatility
-python -m models.train_finbert         # ~10–25 min on CPU
-```
-
-After this, `chroma_db/`, `docstore/`, `outputs/finsight.db`, `mlruns/`, and `models/*.pkl|.joblib|finbert-finetuned/` all exist. **None of these are committed to the repo** (they're gitignored — too large or contain user paths).
-
 ## Running the system
 
 ```bash
@@ -125,25 +78,6 @@ python -m orchestrator.graph
 
 # MLflow tracking UI (training metrics + artifacts)
 mlflow ui --backend-store-uri file:./mlruns
-```
-
-## Testing
-
-```bash
-# Smoke-test all three model wrappers
-python -m evaluation.pipeline_benchmark
-
-# Member-2 deliverable suite (DB + SQL + Chart + Sentiment)
-python -m tests.test_member2
-
-# RAG agent standalone
-python run_rag.py
-
-# RAGAS evaluation across 5 canonical queries
-python -m evaluation.ragas_eval
-
-# MLflow run summary across all experiments
-python -m evaluation.model_comparison
 ```
 
 ## Sample queries
